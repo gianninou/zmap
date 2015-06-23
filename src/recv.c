@@ -52,7 +52,22 @@ void handle_packet(uint32_t buflen, const u_char *bytes) {
 
 	int is_repeat = pbm_check(seen, ntohl(src_ip));
 
+	//HACK for multiple port
+	is_repeat=0;
+
 	fieldset_t *fs = fs_new_fieldset();
+
+	//struct tcphdr *tcp = (struct tcphdr*)((char *) ip_hdr + 4*ip_hdr->ip_hl);
+	//uint16_t sport = ntohs(tcp->th_sport);
+	//printf("port : %d\n",sport);
+	// char line[50];
+	// struct in_addr t;
+	// t.s_addr = ip_hdr->ip_src.s_addr;
+	// const char *temp = inet_ntoa(t);
+	// sprintf(line,"%s:%d",temp,sport);
+	//printf("%s\n",line );
+
+
 	fs_add_ip_fields(fs, ip_hdr);
 	// HACK:
 	// probe modules (for whatever reason) expect the full ethernet frame

@@ -40,7 +40,8 @@ struct fieldset_conf {
 // global configuration
 struct state_conf {
 	int log_level;
-	port_h_t target_port;
+	port_h_t* target_port;
+	int target_port_len;
 	port_h_t source_port_first;
 	port_h_t source_port_last;
 	// maximum number of packets that the scanner will send before terminating

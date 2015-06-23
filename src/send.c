@@ -176,8 +176,15 @@ int send_run(sock_t st, shard_t *s)
 	log_trace("send", "send thread started");
 	pthread_mutex_lock(&send_mutex);
 	// Allocate a buffer to hold the outgoing packet
-	char buf[MAX_PACKET_SIZE];
-	memset(buf, 0, MAX_PACKET_SIZE);
+	//char* buf[MAX_PACKET_SIZE];
+	char **buf=(char**)malloc(sizeof(char*)*zconf.target_port_len);
+	for(int i=0;i<zconf.target_port_len;i++){
+		buf[i]=(char*)malloc(sizeof(char)*MAX_PACKET_SIZE);
+		memset(buf[i], 0, MAX_PACKET_SIZE);
+	}
+
+
+	
 
 	// OS specific per-thread init
 	if (send_run_init(st)) {
@@ -200,8 +207,12 @@ int send_run(sock_t st, shard_t *s)
 			mac_buf);
 	void *probe_data;
 	if (zconf.probe_module->thread_initialize) {
-		zconf.probe_module->thread_initialize(buf, zconf.hw_mac, zconf.gw_mac,
-					      zconf.target_port, &probe_data);
+		int i=0;
+		for(i=0;i<zconf.target_port_len;i++){
+			printf("lancement thread_send %d\n",i );
+			zconf.probe_module->thread_initialize(buf[i], zconf.hw_mac, zconf.gw_mac,
+						      zconf.target_port[i], &probe_data);
+		}
 	}
 	pthread_mutex_unlock(&send_mutex);
 
@@ -285,34 +296,37 @@ int send_run(sock_t st, shard_t *s)
 			break;
 		}
 		s->state.sent++;
+		
 		for (int i=0; i < zconf.packet_streams; i++) {
-			uint32_t src_ip = get_src_ip(curr, i);
+			for(int bi=0;bi<zconf.target_port_len;bi++){
+				uint32_t src_ip = get_src_ip(curr, i);
 
-		  	uint32_t validation[VALIDATE_BYTES/sizeof(uint32_t)];
-			validate_gen(src_ip, curr, (uint8_t *)validation);
-			zconf.probe_module->make_packet(buf, src_ip, curr, validation, i, probe_data);
+			  	uint32_t validation[VALIDATE_BYTES/sizeof(uint32_t)];
+				validate_gen(src_ip, curr, (uint8_t *)validation);
+				zconf.probe_module->make_packet(buf[bi], src_ip, curr, validation, i, probe_data);
 
-			if (zconf.dryrun) {
-				lock_file(stdout);
-				zconf.probe_module->print_packet(stdout, buf);
-				unlock_file(stdout);
-			} else {
-				int length = zconf.probe_module->packet_length;
-				void *contents = buf + zconf.send_ip_pkts*sizeof(struct ether_header);
-				for (int i = 0; i < attempts; ++i) {
-					int rc = send_packet(st, contents, length, idx);
-					if (rc < 0) {
-						struct in_addr addr;
-						addr.s_addr = curr;
-						log_debug("send", "send_packet failed for %s. %s",
-								  inet_ntoa(addr), strerror(errno));
-						s->state.failures++;
-					} else {
-						break;
+				if (zconf.dryrun) {
+					lock_file(stdout);
+					zconf.probe_module->print_packet(stdout, buf[bi]);
+					unlock_file(stdout);
+				} else {
+					int length = zconf.probe_module->packet_length;
+					void *contents = buf[bi] + zconf.send_ip_pkts*sizeof(struct ether_header);
+					for (int i = 0; i < attempts; ++i) {
+						int rc = send_packet(st, contents, length, idx);
+						if (rc < 0) {
+							struct in_addr addr;
+							addr.s_addr = curr;
+							log_debug("send", "send_packet failed for %s. %s",
+									  inet_ntoa(addr), strerror(errno));
+							s->state.failures++;
+						} else {
+							break;
+						}
 					}
+					idx++;
+					idx &= 0xFF;
 				}
-				idx++;
-				idx &= 0xFF;
 			}
 		}
 

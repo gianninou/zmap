@@ -618,8 +618,32 @@ int main(int argc, char *argv[])
 	  	if (!args.target_port_given) {
 			log_fatal("zmap", "target port (-p) is required for this type of probe");
 		}
-		enforce_range("target-port", args.target_port_arg, 0, 0xFFFF);
-		zconf.target_port = args.target_port_arg;
+		
+		//TODO multiple port
+		//enforce_range("target-port", args.target_port_arg, 0, 0xFFFF);
+		printf("debut changement port zmap.c\n");
+		printf("PORTS : %s\n",args.target_port_arg );
+		unsigned int i=0;
+		zconf.target_port_len=1;
+		for(i=0;i<strlen(args.target_port_arg);i++){
+			if(args.target_port_arg[i]==','){
+				zconf.target_port_len++;
+			}
+		}
+		printf("Il y a %d port\n",zconf.target_port_len );
+		zconf.target_port=xmalloc(zconf.target_port_len*sizeof(port_h_t));
+		char* p=strtok(args.target_port_arg,",");
+		i=0;
+		while(p){
+			enforce_range("target-port", atoi(p), 0, 0xFFFF);	
+			zconf.target_port[i] = atoi(p);
+			p=strtok(NULL,",");
+			i++;
+		}
+		printf("fin changement port zmap.c\n");
+		//exit(1);
+
+		
 	}
 	if (args.source_ip_given) {
 		char *dash = strchr(args.source_ip_arg, '-');

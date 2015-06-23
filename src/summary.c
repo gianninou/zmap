@@ -59,8 +59,14 @@ void json_metadata(FILE *file)
 		}
 	}
 
+	char port_str[1000];
+	char buf[10];
+	for(int i=0;i<zconf.target_port_len;i++){
+		sprintf(buf,"%d",zconf.target_port[i]);
+		strcat(port_str,buf);
+	}
 	json_object_object_add(obj, "target_port",
-			json_object_new_int(zconf.target_port));
+			json_object_new_string(port_str));
 	json_object_object_add(obj, "source_port_first",
 			json_object_new_int(zconf.source_port_first));
 	json_object_object_add(obj, "source_port_last",

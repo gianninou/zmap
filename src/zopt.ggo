@@ -14,7 +14,7 @@ section "Basic arguments"
 
 option "target-port"            p "port number to scan (for TCP and UDP scans)"
     typestr="port"
-    optional int
+    optional string
 option "output-file"            o "Output file"
     typestr="name"
     optional string
