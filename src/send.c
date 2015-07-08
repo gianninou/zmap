@@ -17,6 +17,7 @@
 #include <string.h>
 #include <errno.h>
 #include <assert.h>
+#include <math.h>
 
 #include "../lib/includes.h"
 #include "../lib/logger.h"
@@ -61,9 +62,20 @@ static uint32_t num_src_addrs;
 // Source ports for outgoing packets
 static uint16_t num_src_ports;
 
+static unsigned long long* t_pow;
+	
+
+
+
 // global sender initialize (not thread specific)
 iterator_t* send_init(void)
 {
+	printf("INIT POW\n");
+	t_pow = (unsigned long long*)malloc(sizeof(unsigned long long)*33);	
+	int tmp=0;
+	for(tmp=0;tmp<=32;tmp++){
+		t_pow[tmp]=powl(2,tmp);
+	}
 
 	// generate a new primitive root and starting position
 	iterator_t *it;
@@ -170,18 +182,34 @@ static inline ipaddr_n_t get_src_ip(ipaddr_n_t dst, int local_offset)
 			% num_src_addrs)) + srcip_first;
 }
 
+unsigned long long reverse_ip(unsigned long long ip, unsigned long long mask){
+	uint32_t rang=32;
+	unsigned long long nb=ip;
+	unsigned long long myip=0ULL;
+	while(rang>0 && nb>0){
+		/* if current less significant bit==1, add 2^rang-1 to ip*/
+		if(nb%2){
+			myip+=t_pow[rang-1];
+		}
+		rang--;
+		/* shift right */
+		nb>>=1;
+	}
+	return (myip^mask);
+}
+
 // one sender thread
 int send_run(sock_t st, shard_t *s)
 {
 	log_trace("send", "send thread started");
 	pthread_mutex_lock(&send_mutex);
 	// Allocate a buffer to hold the outgoing packet
-	//char* buf[MAX_PACKET_SIZE];
-	char **buf=(char**)malloc(sizeof(char*)*zconf.target_port_len);
-	for(int i=0;i<zconf.target_port_len;i++){
-		buf[i]=(char*)malloc(sizeof(char)*MAX_PACKET_SIZE);
-		memset(buf[i], 0, MAX_PACKET_SIZE);
-	}
+	char* buf[MAX_PACKET_SIZE];
+	// char **buf=(char**)malloc(sizeof(char*)*zconf.target_port_len);
+	// for(int i=0;i<zconf.target_port_len;i++){
+	// 	buf[i]=(char*)malloc(sizeof(char)*MAX_PACKET_SIZE);
+	// 	memset(buf[i], 0, MAX_PACKET_SIZE);
+	// }
 
 
 	
@@ -208,11 +236,11 @@ int send_run(sock_t st, shard_t *s)
 	void *probe_data;
 	if (zconf.probe_module->thread_initialize) {
 		int i=0;
-		for(i=0;i<zconf.target_port_len;i++){
+		//for(i=0;i<zconf.target_port_len;i++){
 			printf("lancement thread_send %d\n",i );
-			zconf.probe_module->thread_initialize(buf[i], zconf.hw_mac, zconf.gw_mac,
+			zconf.probe_module->thread_initialize(buf/*[i]*/, zconf.hw_mac, zconf.gw_mac,
 						      zconf.target_port[i], &probe_data);
-		}
+		//}
 	}
 	pthread_mutex_unlock(&send_mutex);
 
@@ -248,6 +276,36 @@ int send_run(sock_t st, shard_t *s)
 	uint32_t curr = shard_get_cur_ip(s);
 	int attempts = zconf.num_retries + 1;
 	uint32_t idx = 0;
+
+
+	static uint32_t myip=0;
+	static unsigned long long last_ip=0;
+	if(!myip){
+		myip = (t_pow[32]/zconf.distribute)*(zconf.part-1) ;
+		last_ip = (t_pow[32]/zconf.distribute);
+		printf("INIT : %d\n",myip );
+	}
+	unsigned long long mask = reverse_ip((zconf.part-1),0);
+	printf("mask : %llu\n",mask);
+
+	//char strf[100];
+	// sprintf(strf,"/media/giann/dist_mask_%d.txt",zconf.part)	;
+	// printf("%s\n",strf );
+	// FILE* f = fopen(strf,"w");
+	// if(f==NULL){
+	// 	perror("Erreur ouverture fichier : ");
+	// 	exit(1);
+	// }
+
+	// sprintf(strf,"/media/giann/black_dist_mask_%d.txt",zconf.part)	;
+	// printf("%s\n",strf );
+	// FILE* f2 = fopen(strf,"w");
+	// if(f2==NULL){
+	// 	perror("Erreur ouverture fichier2 : ");
+	// 	exit(1);
+	// }
+
+	//printf("************************************************\n");
 	while (1) {
 		// adaptive timing delay
 		if (delay > 0) {
@@ -290,53 +348,75 @@ int send_run(sock_t st, shard_t *s)
 			s->cb(s->id, s->arg);
 			break;
 		}
-		if (curr == 0) {
+		if (!last_ip) {
 			s->cb(s->id, s->arg);
 			log_trace("send", "send thread %hhu finished, shard depleted", s->id);
 			break;
 		}
 		s->state.sent++;
+		last_ip--;
+		//TODO vgiannin
+		//printf("--------------------------------------------------\n");
 		
+
 		for (int i=0; i < zconf.packet_streams; i++) {
+			
+			unsigned long long myip2=reverse_ip(myip,mask);
+			myip++;
+
+			uint32_t src_ip = get_src_ip(myip2, i);
+			//printf("source ip %d\n",src_ip );
+		  	uint32_t validation[VALIDATE_BYTES/sizeof(uint32_t)];
+			validate_gen(src_ip, myip2, (uint8_t *)validation);
+			//printf("ip : %d\n",curr );
 			for(int bi=0;bi<zconf.target_port_len;bi++){
-				uint32_t src_ip = get_src_ip(curr, i);
+				 if(blacklist_is_allowed(htonl(myip2))){
+					//printf("OK\n");
+					//printf("*************** %d -> %llu\n",myip,myip2);
+					zconf.probe_module->make_packet(buf, src_ip,htonl(myip2), validation, i, probe_data);
 
-			  	uint32_t validation[VALIDATE_BYTES/sizeof(uint32_t)];
-				validate_gen(src_ip, curr, (uint8_t *)validation);
-				zconf.probe_module->make_packet(buf[bi], src_ip, curr, validation, i, probe_data);
-
-				if (zconf.dryrun) {
-					lock_file(stdout);
-					zconf.probe_module->print_packet(stdout, buf[bi]);
-					unlock_file(stdout);
-				} else {
-					int length = zconf.probe_module->packet_length;
-					void *contents = buf[bi] + zconf.send_ip_pkts*sizeof(struct ether_header);
-					for (int i = 0; i < attempts; ++i) {
-						int rc = send_packet(st, contents, length, idx);
-						if (rc < 0) {
-							struct in_addr addr;
-							addr.s_addr = curr;
-							log_debug("send", "send_packet failed for %s. %s",
-									  inet_ntoa(addr), strerror(errno));
-							s->state.failures++;
-						} else {
-							break;
+					if (zconf.dryrun) {
+						//fprintf(f, "%llu\n",myip2);
+						lock_file(stdout);
+						zconf.probe_module->print_packet(stdout, buf);
+						unlock_file(stdout);
+					} else {
+						int length = zconf.probe_module->packet_length;
+						void *contents = buf + zconf.send_ip_pkts*sizeof(struct ether_header);
+						for (int i = 0; i < attempts; ++i) {
+							int rc = send_packet(st, contents, length, idx);
+							if (rc < 0) {
+								struct in_addr addr;
+								addr.s_addr = myip2;//curr;
+								log_debug("send", "send_packet failed for %s. %s",
+										  inet_ntoa(addr), strerror(errno));
+								s->state.failures++;
+							} else {
+								break;
+							}
 						}
+						idx++;
+						idx &= 0xFF;
 					}
-					idx++;
-					idx &= 0xFF;
-				}
+				}//else{
+					//printf("PAS OK\n");
+				// 	if (zconf.dryrun) {
+				// 		fprintf(f2, "%llu\n",myip2);
+				// 	}
+				// }
 			}
 		}
 
-		curr = shard_get_next_ip(s);
+		//curr = shard_get_next_ip(s);
 	}
 	if (zconf.dryrun) {
 		lock_file(stdout);
 		fflush(stdout);
 		unlock_file(stdout);
+		
 	}
+	//fclose(f);
+	//fclose(f2);
 	log_debug("send", "thread %hu finished", s->id);
 	return EXIT_SUCCESS;
 }

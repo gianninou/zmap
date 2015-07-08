@@ -619,7 +619,7 @@ int main(int argc, char *argv[])
 			log_fatal("zmap", "target port (-p) is required for this type of probe");
 		}
 		
-		//TODO multiple port
+		//TODO multiple port vgiannin
 		//enforce_range("target-port", args.target_port_arg, 0, 0xFFFF);
 		printf("debut changement port zmap.c\n");
 		printf("PORTS : %s\n",args.target_port_arg );
@@ -645,6 +645,20 @@ int main(int argc, char *argv[])
 
 		
 	}
+
+	if(args.distribute_given && args.part_given){
+		printf("DISTIBUTION : %d:%d\n",args.distribute_arg,args.part_arg);
+		if(args.distribute_arg>0 && args.part_arg<=args.distribute_arg && args.part_arg>0){
+			printf("Distribution OK\n");
+			zconf.distribute=args.distribute_arg;
+			zconf.part=args.part_arg;
+		}else{
+			printf("distribution fail\n");
+		}
+	}
+
+
+
 	if (args.source_ip_given) {
 		char *dash = strchr(args.source_ip_arg, '-');
 		if (dash) { // range
