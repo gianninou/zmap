@@ -204,12 +204,13 @@ int send_run(sock_t st, shard_t *s)
 	log_trace("send", "send thread started");
 	pthread_mutex_lock(&send_mutex);
 	// Allocate a buffer to hold the outgoing packet
-	char* buf[MAX_PACKET_SIZE];
-	// char **buf=(char**)malloc(sizeof(char*)*zconf.target_port_len);
-	// for(int i=0;i<zconf.target_port_len;i++){
-	// 	buf[i]=(char*)malloc(sizeof(char)*MAX_PACKET_SIZE);
-	// 	memset(buf[i], 0, MAX_PACKET_SIZE);
-	// }
+	//char* buf[MAX_PACKET_SIZE];
+
+	 char **buf=(char**)malloc(sizeof(char*)*zconf.target_port_len);
+	 for(int i=0;i<zconf.target_port_len;i++){
+	 	buf[i]=(char*)malloc(sizeof(char)*MAX_PACKET_SIZE);
+	 	memset(buf[i], 0, MAX_PACKET_SIZE);
+	 }
 
 
 	
@@ -236,11 +237,11 @@ int send_run(sock_t st, shard_t *s)
 	void *probe_data;
 	if (zconf.probe_module->thread_initialize) {
 		int i=0;
-		//for(i=0;i<zconf.target_port_len;i++){
+		for(i=0;i<zconf.target_port_len;i++){
 			printf("lancement thread_send %d\n",i );
-			zconf.probe_module->thread_initialize(buf/*[i]*/, zconf.hw_mac, zconf.gw_mac,
+			zconf.probe_module->thread_initialize(buf[i], zconf.hw_mac, zconf.gw_mac,
 						      zconf.target_port[i], &probe_data);
-		//}
+		}
 	}
 	pthread_mutex_unlock(&send_mutex);
 
@@ -273,7 +274,7 @@ int send_run(sock_t st, shard_t *s)
 		    last_time = now();
         }
 	}
-	uint32_t curr = shard_get_cur_ip(s);
+	//uint32_t curr = shard_get_cur_ip(s);
 	int attempts = zconf.num_retries + 1;
 	uint32_t idx = 0;
 
@@ -288,8 +289,8 @@ int send_run(sock_t st, shard_t *s)
 	unsigned long long mask = reverse_ip((zconf.part-1),0);
 	printf("mask : %llu\n",mask);
 
-	//char strf[100];
-	// sprintf(strf,"/media/giann/dist_mask_%d.txt",zconf.part)	;
+	// char strf[100];
+	// sprintf(strf,"/media/giann/dist_mask_ports_%d.txt",zconf.part)	;
 	// printf("%s\n",strf );
 	// FILE* f = fopen(strf,"w");
 	// if(f==NULL){
@@ -297,7 +298,7 @@ int send_run(sock_t st, shard_t *s)
 	// 	exit(1);
 	// }
 
-	// sprintf(strf,"/media/giann/black_dist_mask_%d.txt",zconf.part)	;
+	// sprintf(strf,"/media/giann/black_dist_mask_ports_%d.txt",zconf.part)	;
 	// printf("%s\n",strf );
 	// FILE* f2 = fopen(strf,"w");
 	// if(f2==NULL){
@@ -305,7 +306,6 @@ int send_run(sock_t st, shard_t *s)
 	// 	exit(1);
 	// }
 
-	//printf("************************************************\n");
 	while (1) {
 		// adaptive timing delay
 		if (delay > 0) {
@@ -348,15 +348,13 @@ int send_run(sock_t st, shard_t *s)
 			s->cb(s->id, s->arg);
 			break;
 		}
-		if (!last_ip) {
+		if (!last_ip /*curr==0*/) {
 			s->cb(s->id, s->arg);
 			log_trace("send", "send thread %hhu finished, shard depleted", s->id);
 			break;
 		}
 		s->state.sent++;
 		last_ip--;
-		//TODO vgiannin
-		//printf("--------------------------------------------------\n");
 		
 
 		for (int i=0; i < zconf.packet_streams; i++) {
@@ -365,29 +363,34 @@ int send_run(sock_t st, shard_t *s)
 			myip++;
 
 			uint32_t src_ip = get_src_ip(myip2, i);
-			//printf("source ip %d\n",src_ip );
 		  	uint32_t validation[VALIDATE_BYTES/sizeof(uint32_t)];
 			validate_gen(src_ip, myip2, (uint8_t *)validation);
-			//printf("ip : %d\n",curr );
-			for(int bi=0;bi<zconf.target_port_len;bi++){
-				 if(blacklist_is_allowed(htonl(myip2))){
-					//printf("OK\n");
+
+			if(blacklist_is_allowed(htonl(myip2))){
+				for(int bi=0;bi<zconf.target_port_len;bi++){
 					//printf("*************** %d -> %llu\n",myip,myip2);
-					zconf.probe_module->make_packet(buf, src_ip,htonl(myip2), validation, i, probe_data);
+					zconf.probe_module->make_packet(buf[bi], src_ip,htonl(myip2), validation, i, probe_data);
+					
+
+					// uint32_t src_ip = get_src_ip(curr, i);
+				 	// uint32_t validation[VALIDATE_BYTES/sizeof(uint32_t)];
+					// validate_gen(src_ip, curr, (uint8_t *)validation);
+					// zconf.probe_module->make_packet(buf[bi], src_ip,curr, validation, i, probe_data);
 
 					if (zconf.dryrun) {
 						//fprintf(f, "%llu\n",myip2);
-						lock_file(stdout);
-						zconf.probe_module->print_packet(stdout, buf);
-						unlock_file(stdout);
+						 lock_file(stdout);
+						 zconf.probe_module->print_packet(stdout, buf);
+						 unlock_file(stdout);
 					} else {
 						int length = zconf.probe_module->packet_length;
-						void *contents = buf + zconf.send_ip_pkts*sizeof(struct ether_header);
+						void *contents = buf[bi] + zconf.send_ip_pkts*sizeof(struct ether_header);
 						for (int i = 0; i < attempts; ++i) {
 							int rc = send_packet(st, contents, length, idx);
 							if (rc < 0) {
 								struct in_addr addr;
-								addr.s_addr = myip2;//curr;
+								//addr.s_addr = curr;
+								addr.s_addr = myip2;
 								log_debug("send", "send_packet failed for %s. %s",
 										  inet_ntoa(addr), strerror(errno));
 								s->state.failures++;
@@ -398,13 +401,12 @@ int send_run(sock_t st, shard_t *s)
 						idx++;
 						idx &= 0xFF;
 					}
-				}//else{
-					//printf("PAS OK\n");
-				// 	if (zconf.dryrun) {
-				// 		fprintf(f2, "%llu\n",myip2);
-				// 	}
-				// }
-			}
+				}
+			}//else{
+			//  	if (zconf.dryrun) {
+			//  		fprintf(f2, "%llu\n",myip2);
+			//  	}
+			//  }
 		}
 
 		//curr = shard_get_next_ip(s);
@@ -415,8 +417,8 @@ int send_run(sock_t st, shard_t *s)
 		unlock_file(stdout);
 		
 	}
-	//fclose(f);
-	//fclose(f2);
+	// fclose(f);
+	// fclose(f2);
 	log_debug("send", "thread %hu finished", s->id);
 	return EXIT_SUCCESS;
 }
