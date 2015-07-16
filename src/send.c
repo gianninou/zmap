@@ -182,10 +182,10 @@ static inline ipaddr_n_t get_src_ip(ipaddr_n_t dst, int local_offset)
 			% num_src_addrs)) + srcip_first;
 }
 
-unsigned long long reverse_ip(unsigned long long ip, unsigned long long mask){
+uint32_t reverse_ip(uint32_t ip, uint32_t mask){
 	uint32_t rang=32;
-	unsigned long long nb=ip;
-	unsigned long long myip=0ULL;
+	uint32_t nb=ip;
+	uint32_t myip=0;
 	while(rang>0 && nb>0){
 		/* if current less significant bit==1, add 2^rang-1 to ip*/
 		if(nb%2){
@@ -198,9 +198,23 @@ unsigned long long reverse_ip(unsigned long long ip, unsigned long long mask){
 	return (myip^mask);
 }
 
+void int2str_ip(uint32_t ip, char* str){
+	unsigned char bytes[4];
+	bytes[0] = ip & 0xFF;
+	bytes[1] = (ip >> 8) & 0xFF;
+	bytes[2] = (ip >> 16) & 0xFF;
+	bytes[3] = (ip >> 24) & 0xFF;	
+	sprintf(str,"%d.%d.%d.%d", bytes[3], bytes[2], bytes[1], bytes[0]);        
+}
+
+
+
 // one sender thread
 int send_run(sock_t st, shard_t *s)
 {
+
+	char str_ip[20];
+
 	log_trace("send", "send thread started");
 	pthread_mutex_lock(&send_mutex);
 	// Allocate a buffer to hold the outgoing packet
@@ -286,25 +300,25 @@ int send_run(sock_t st, shard_t *s)
 		last_ip = (t_pow[32]/zconf.distribute);
 		printf("INIT : %d\n",myip );
 	}
-	unsigned long long mask = reverse_ip((zconf.part-1),0);
-	printf("mask : %llu\n",mask);
+	uint32_t mask = reverse_ip((zconf.part-1),0);
+	printf("mask : %d\n",mask);
 
-	// char strf[100];
-	// sprintf(strf,"/media/giann/dist_mask_ports_%d.txt",zconf.part)	;
-	// printf("%s\n",strf );
-	// FILE* f = fopen(strf,"w");
-	// if(f==NULL){
-	// 	perror("Erreur ouverture fichier : ");
-	// 	exit(1);
-	// }
+	char strf[100];
+	sprintf(strf,"whitelist_%d.txt",zconf.part)	;
+	printf("whitelist file : %s\n",strf );
+	FILE* f = fopen(strf,"w");
+	if(f==NULL){
+		perror("Erreur ouverture whitelist : ");
+		exit(1);
+	}
 
-	// sprintf(strf,"/media/giann/black_dist_mask_ports_%d.txt",zconf.part)	;
-	// printf("%s\n",strf );
-	// FILE* f2 = fopen(strf,"w");
-	// if(f2==NULL){
-	// 	perror("Erreur ouverture fichier2 : ");
-	// 	exit(1);
-	// }
+	sprintf(strf,"blacklist_%d.txt",zconf.part)	;
+	printf("blacklist file : %s\n",strf );
+	FILE* f2 = fopen(strf,"w");
+	if(f2==NULL){
+		perror("Erreur ouverture blacklist : ");
+		exit(1);
+	}
 
 	while (1) {
 		// adaptive timing delay
@@ -357,56 +371,53 @@ int send_run(sock_t st, shard_t *s)
 		last_ip--;
 		
 
-		for (int i=0; i < zconf.packet_streams; i++) {
+		uint32_t myip2=(reverse_ip(myip,mask));
+		myip++;
+
+		int2str_ip(myip2,str_ip);
+		
+		
+		if(blacklist_is_allowed(htonl(myip2))){
+			fprintf(f, "%s\n",str_ip);
+			fflush(f);
 			
-			unsigned long long myip2=reverse_ip(myip,mask);
-			myip++;
-
-			uint32_t src_ip = get_src_ip(myip2, i);
-		  	uint32_t validation[VALIDATE_BYTES/sizeof(uint32_t)];
-			validate_gen(src_ip, myip2, (uint8_t *)validation);
-
-			if(blacklist_is_allowed(htonl(myip2))){
-				for(int bi=0;bi<zconf.target_port_len;bi++){
-					//printf("*************** %d -> %llu\n",myip,myip2);
-					zconf.probe_module->make_packet(buf[bi], src_ip,htonl(myip2), validation, i, probe_data);
+			for(int bi=0;bi<zconf.target_port_len;bi++){
+				for (int i=0; i < zconf.packet_streams; i++) {
 					
-
-					// uint32_t src_ip = get_src_ip(curr, i);
-				 	// uint32_t validation[VALIDATE_BYTES/sizeof(uint32_t)];
-					// validate_gen(src_ip, curr, (uint8_t *)validation);
-					// zconf.probe_module->make_packet(buf[bi], src_ip,curr, validation, i, probe_data);
-
+					uint32_t src_ip = get_src_ip(myip2, i);
+					uint32_t validation[VALIDATE_BYTES/sizeof(uint32_t)];
+					validate_gen(src_ip, htonl(myip2), (uint8_t *)validation);
+					zconf.probe_module->make_packet(buf[bi], src_ip, htonl(myip2), validation, i, probe_data);
+					
 					if (zconf.dryrun) {
-						//fprintf(f, "%llu\n",myip2);
-						 lock_file(stdout);
-						 zconf.probe_module->print_packet(stdout, buf);
-						 unlock_file(stdout);
+						lock_file(stdout);
+						zconf.probe_module->print_packet(stdout, buf[bi]);
+						unlock_file(stdout);
 					} else {
-						int length = zconf.probe_module->packet_length;
-						void *contents = buf[bi] + zconf.send_ip_pkts*sizeof(struct ether_header);
-						for (int i = 0; i < attempts; ++i) {
-							int rc = send_packet(st, contents, length, idx);
-							if (rc < 0) {
-								struct in_addr addr;
-								//addr.s_addr = curr;
-								addr.s_addr = myip2;
-								log_debug("send", "send_packet failed for %s. %s",
-										  inet_ntoa(addr), strerror(errno));
-								s->state.failures++;
-							} else {
-								break;
+							int length = zconf.probe_module->packet_length;
+							void *contents = buf[bi] + zconf.send_ip_pkts*sizeof(struct ether_header);
+							for (int j = 0; j < attempts; ++j) {
+								int rc = send_packet(st, contents, length, idx);
+								if (rc < 0) {
+									struct in_addr addr;
+									//addr.s_addr = curr;
+									addr.s_addr = htonl(myip2);
+									log_debug("send", "send_packet failed for %s. %s",
+											  inet_ntoa(addr), strerror(errno));
+									s->state.failures++;
+								} else {
+									break;
+								}
 							}
-						}
-						idx++;
-						idx &= 0xFF;
+							idx++;
+							idx &= 0xFF;
 					}
 				}
-			}//else{
-			//  	if (zconf.dryrun) {
-			//  		fprintf(f2, "%llu\n",myip2);
-			//  	}
-			//  }
+			}
+		
+		}else{
+			fprintf(f2, "%s\n",str_ip);
+			fflush(f2);
 		}
 
 		//curr = shard_get_next_ip(s);
@@ -417,8 +428,8 @@ int send_run(sock_t st, shard_t *s)
 		unlock_file(stdout);
 		
 	}
-	// fclose(f);
-	// fclose(f2);
+	fclose(f);
+	fclose(f2);
 	log_debug("send", "thread %hu finished", s->id);
 	return EXIT_SUCCESS;
 }

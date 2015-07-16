@@ -646,6 +646,10 @@ int main(int argc, char *argv[])
 		
 	}
 
+
+
+	
+
 	if(args.distribute_given && args.part_given){
 		printf("DISTIBUTION : %d:%d\n",args.distribute_arg,args.part_arg);
 		if(args.distribute_arg>0 && args.part_arg<=args.distribute_arg && args.part_arg>0){
@@ -658,6 +662,11 @@ int main(int argc, char *argv[])
 	}
 
 
+	SET_IF_GIVEN(zconf.rate, rate);
+	printf("given rate : %d\n",zconf.rate );
+	zconf.rate=zconf.rate/zconf.target_port_len;
+	printf("real rate : %d\n",zconf.rate );
+	
 
 	if (args.source_ip_given) {
 		char *dash = strchr(args.source_ip_arg, '-');
