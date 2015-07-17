@@ -195,7 +195,7 @@ uint32_t reverse_ip(uint32_t ip, uint32_t mask){
 		/* shift right */
 		nb>>=1;
 	}
-	return (myip^mask);
+	return (myip ^ mask);
 }
 
 void int2str_ip(uint32_t ip, char* str){
@@ -300,8 +300,8 @@ int send_run(sock_t st, shard_t *s)
 		last_ip = (t_pow[32]/zconf.distribute);
 		printf("INIT : %d\n",myip );
 	}
-	uint32_t mask = reverse_ip((zconf.part-1),0);
-	printf("mask : %d\n",mask);
+	uint32_t maskVM = reverse_ip((zconf.part-1),zconf.mask);
+	printf("maskVM : %d\n",maskVM);
 
 	// char strf[100];
 	// sprintf(strf,"whitelist_%d.txt",zconf.part)	;
@@ -371,7 +371,7 @@ int send_run(sock_t st, shard_t *s)
 		last_ip--;
 		
 
-		uint32_t myip2=(reverse_ip(myip,mask));
+		uint32_t myip2=(reverse_ip(myip,maskVM));
 		myip++;
 
 		int2str_ip(myip2,str_ip);
@@ -418,6 +418,11 @@ int send_run(sock_t st, shard_t *s)
 		}else{
 			//fprintf(f2, "%s\n",str_ip);
 			//fflush(f2);
+		}
+
+		static int aa=0;
+		if(aa++==5){
+			exit(1);
 		}
 
 		//curr = shard_get_next_ip(s);

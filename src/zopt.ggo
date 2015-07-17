@@ -74,6 +74,10 @@ option "part"                   - "set the part number"
     typestr="n"
     optional int
     default="1"
+option "mask"                   - "set mask"
+    typestr="n"
+    optional int
+    default="0"
 
 section "Network options"
 

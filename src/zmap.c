@@ -647,7 +647,10 @@ int main(int argc, char *argv[])
 	}
 
 
-
+	if(args.mask_given){
+		printf("Un masque est donné : %d\n",args.mask_arg);
+		zconf.mask=args.mask_arg;
+	}
 	
 
 	if(args.distribute_given && args.part_given){

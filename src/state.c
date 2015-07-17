@@ -21,6 +21,7 @@ struct state_conf zconf = {
 	.target_port = NULL,
 	.target_port_len = 0,
 	.distribute = 1,
+	.mask=0,
 	.part = 1,
 	.max_targets = 0xFFFFFFFF,
 	.max_runtime = 0,

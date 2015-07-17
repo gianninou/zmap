@@ -43,6 +43,7 @@ struct state_conf {
 	port_h_t* target_port;
 	int target_port_len;
 	int distribute;
+	int mask;
 	int part;
 	port_h_t source_port_first;
 	port_h_t source_port_last;
