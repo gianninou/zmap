@@ -303,22 +303,22 @@ int send_run(sock_t st, shard_t *s)
 	uint32_t mask = reverse_ip((zconf.part-1),0);
 	printf("mask : %d\n",mask);
 
-	char strf[100];
-	sprintf(strf,"whitelist_%d.txt",zconf.part)	;
-	printf("whitelist file : %s\n",strf );
-	FILE* f = fopen(strf,"w");
-	if(f==NULL){
-		perror("Erreur ouverture whitelist : ");
-		exit(1);
-	}
+	// char strf[100];
+	// sprintf(strf,"whitelist_%d.txt",zconf.part)	;
+	// printf("whitelist file : %s\n",strf );
+	// FILE* f = fopen(strf,"w+");
+	// if(f==NULL){
+	// 	perror("Erreur ouverture whitelist : ");
+	// 	exit(1);
+	// }
 
-	sprintf(strf,"blacklist_%d.txt",zconf.part)	;
-	printf("blacklist file : %s\n",strf );
-	FILE* f2 = fopen(strf,"w");
-	if(f2==NULL){
-		perror("Erreur ouverture blacklist : ");
-		exit(1);
-	}
+	// sprintf(strf,"blacklist_%d.txt",zconf.part)	;
+	// printf("blacklist file : %s\n",strf );
+	// FILE* f2 = fopen(strf,"w+");
+	// if(f2==NULL){
+	// 	perror("Erreur ouverture blacklist : ");
+	// 	exit(1);
+	// }
 
 	while (1) {
 		// adaptive timing delay
@@ -378,8 +378,8 @@ int send_run(sock_t st, shard_t *s)
 		
 		
 		if(blacklist_is_allowed(htonl(myip2))){
-			fprintf(f, "%s\n",str_ip);
-			fflush(f);
+			//fprintf(f, "%s\n",str_ip);
+			//fflush(f);
 			
 			for(int bi=0;bi<zconf.target_port_len;bi++){
 				for (int i=0; i < zconf.packet_streams; i++) {
@@ -416,8 +416,8 @@ int send_run(sock_t st, shard_t *s)
 			}
 		
 		}else{
-			fprintf(f2, "%s\n",str_ip);
-			fflush(f2);
+			//fprintf(f2, "%s\n",str_ip);
+			//fflush(f2);
 		}
 
 		//curr = shard_get_next_ip(s);
@@ -428,8 +428,8 @@ int send_run(sock_t st, shard_t *s)
 		unlock_file(stdout);
 		
 	}
-	fclose(f);
-	fclose(f2);
+	// fclose(f);
+	// fclose(f2);
 	log_debug("send", "thread %hu finished", s->id);
 	return EXIT_SUCCESS;
 }
