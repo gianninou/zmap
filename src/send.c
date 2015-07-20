@@ -420,11 +420,6 @@ int send_run(sock_t st, shard_t *s)
 			//fflush(f2);
 		}
 
-		static int aa=0;
-		if(aa++==5){
-			exit(1);
-		}
-
 		//curr = shard_get_next_ip(s);
 	}
 	if (zconf.dryrun) {
